@@ -1,0 +1,132 @@
+erDiagram
+    PERSONS {
+        int id PK
+        varchar first_name
+        varchar last_name
+        varchar email UK
+        varchar phone
+        enum gender
+        date date_of_birth
+        varchar address
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    STUDENTS {
+        int id PK
+        int person_id FK
+        varchar reg_number UK
+        varchar programme
+        int year_of_study
+        int semester
+        date enrollment_date
+        enum status
+    }
+
+    LECTURERS {
+        int id PK
+        int person_id FK
+        varchar staff_id UK
+        varchar department
+        varchar qualification
+        varchar specialization
+        date hire_date
+        enum status
+    }
+
+    COURSES {
+        int id PK
+        varchar course_code UK
+        varchar title
+        text description
+        int credit_hours
+        varchar department
+        int level
+        int semester
+        timestamp created_at
+    }
+
+    STUDENT_COURSES {
+        int id PK
+        int student_id FK
+        int course_id FK
+        varchar academic_year
+        int semester
+        date registration_date
+    }
+
+    LECTURER_COURSES {
+        int id PK
+        int lecturer_id FK
+        int course_id FK
+        varchar academic_year
+        int semester
+        date assigned_date
+    }
+
+    SCORES {
+        int id PK
+        int student_id FK
+        int course_id FK
+        varchar academic_year
+        int semester
+        decimal cat_score
+        decimal exam_score
+        decimal total_score
+        varchar grade
+        varchar remarks
+        int entered_by FK
+        timestamp entered_at
+        timestamp updated_at
+    }
+
+    BOOKS {
+        int id PK
+        varchar isbn UK
+        varchar title
+        varchar author
+        varchar edition
+        varchar version
+        year year_published
+        varchar publisher
+        varchar category
+        int total_copies
+        int available_copies
+        varchar shelf_location
+        timestamp created_at
+    }
+
+    BORROWING_RECORDS {
+        int id PK
+        int student_id FK
+        int book_id FK
+        date borrow_date
+        date due_date
+        date return_date
+        enum status
+        decimal fine_amount
+        varchar notes
+    }
+
+    RESERVATIONS {
+        int id PK
+        int student_id FK
+        int book_id FK
+        date reservation_date
+        date expiry_date
+        enum status
+    }
+
+    PERSONS ||--o| STUDENTS : "is a"
+    PERSONS ||--o| LECTURERS : "is a"
+    STUDENTS ||--o{ STUDENT_COURSES : "registers for"
+    COURSES  ||--o{ STUDENT_COURSES : "enrolled by"
+    LECTURERS ||--o{ LECTURER_COURSES : "assigned to"
+    COURSES   ||--o{ LECTURER_COURSES : "taught by"
+    STUDENTS ||--o{ SCORES : "receives"
+    COURSES  ||--o{ SCORES : "has scores in"
+    LECTURERS ||--o{ SCORES : "enters"
+    STUDENTS ||--o{ BORROWING_RECORDS : "borrows"
+    BOOKS    ||--o{ BORROWING_RECORDS : "borrowed via"
+    STUDENTS ||--o{ RESERVATIONS : "reserves"
+    BOOKS    ||--o{ RESERVATIONS : "reserved via"

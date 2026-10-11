@@ -1,0 +1,88 @@
+flowchart TB
+    subgraph VIEW["🖥️  VIEW LAYER  (Java Swing GUI)"]
+        direction LR
+        MF["MainFrame\n(JFrame)"]
+        SP["StudentPanel"]
+        LP["LecturerPanel"]
+        CP["CoursePanel"]
+        LIB["LibraryPanel"]
+        RS["ResultSlipPanel"]
+        MF --> SP & LP & CP & LIB & RS
+    end
+
+    subgraph CONTROLLER["⚙️  CONTROLLER LAYER  (Business Logic)"]
+        direction LR
+        SC["StudentController"]
+        LC["LecturerController"]
+        CC["CourseController"]
+        LIC["LibraryController"]
+    end
+
+    subgraph UTIL["🔧  UTILITIES"]
+        IV["InputValidator"]
+        FS["FileStorageManager"]
+    end
+
+    subgraph MODEL["🗄️  MODEL LAYER  (Data & Domain)"]
+        direction TB
+        subgraph DOMAIN["Domain Classes"]
+            P["Person (abstract)"]
+            ST["Student"]
+            LEC["Lecturer"]
+            CRS["Course"]
+            SCR["Score"]
+            BK["Book"]
+            BR["BorrowingRecord"]
+            P --> ST & LEC
+        end
+        subgraph DAO["Data Access Objects"]
+            SDAO["StudentDAO"]
+            LDAO["LecturerDAO"]
+            CDAO["CourseDAO"]
+            SCDAO["ScoreDAO"]
+            BDAO["BookDAO"]
+        end
+        subgraph DB["Persistence"]
+            DBC["DatabaseConnection\n(Singleton)"]
+            MYSQL[("MySQL\nDatabase")]
+            FILES[("File System\nCSV / TXT")]
+        end
+        SDAO & LDAO & CDAO & SCDAO & BDAO --> DBC --> MYSQL
+    end
+
+    %% View → Controller
+    SP  -->|"user actions"| SC
+    LP  -->|"user actions"| LC
+    CP  -->|"user actions"| CC
+    LIB -->|"user actions"| LIC
+    RS  -->|"user actions"| SC
+
+    %% Controller → Utilities
+    SC  --> IV & FS
+    LC  --> IV & FS
+    CC  --> IV & FS
+    LIC --> IV & FS
+
+    %% Controller → DAO
+    SC  --> SDAO & SCDAO
+    LC  --> LDAO
+    CC  --> CDAO & SDAO & LDAO
+    LIC --> BDAO
+
+    %% DAO → Domain
+    SDAO  --> ST
+    LDAO  --> LEC
+    CDAO  --> CRS
+    SCDAO --> SCR
+    BDAO  --> BK & BR
+
+    %% File storage
+    FS --> FILES
+
+    style VIEW       fill:#e3f2fd,stroke:#1565c0,color:#000
+    style CONTROLLER fill:#e8f5e9,stroke:#2e7d32,color:#000
+    style MODEL      fill:#fff3e0,stroke:#e65100,color:#000
+    style UTIL       fill:#f3e5f5,stroke:#6a1b9a,color:#000
+    style DOMAIN     fill:#fff8e1,stroke:#f57f17,color:#000
+    style DAO        fill:#fce4ec,stroke:#880e4f,color:#000
+    style DB         fill:#e8eaf6,stroke:#283593,color:#000

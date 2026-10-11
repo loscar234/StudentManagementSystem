@@ -1,0 +1,6 @@
+ScoreID,StudentID,CourseID,CourseCode,CourseTitle,AcademicYear,Semester,CATScore,ExamScore,TotalScore,Grade,Remarks
+17,6,2,CS201,"Data Structures & Algorithms",2024/2025,1,24.00,48.00,72.00,A,
+18,6,3,CS301,"Database Systems",2024/2025,1,29.00,56.00,85.00,A,
+19,6,6,IT201,"Networking Fundamentals",2024/2025,1,25.00,59.00,84.00,A,
+20,6,8,SE201,"Object-Oriented Programming",2024/2025,1,20.00,46.00,66.00,B,
+21,6,10,CS202,"Discrete Mathematics",2024/2025,1,22.00,49.00,71.00,A,

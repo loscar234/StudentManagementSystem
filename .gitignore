@@ -1,0 +1,17 @@
+﻿# Compiled class files
+out/
+bin/
+*.class
+
+# IntelliJ IDEA files
+.idea/
+*.iml
+*.iws
+
+# Sensitive configuration & local data
+db.properties
+data/system_log.txt
+
+# OS-generated files
+Thumbs.db
+.DS_Store

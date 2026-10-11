@@ -1,0 +1,23 @@
+﻿services:
+  sms-db:
+    image: mysql:8.0
+    container_name: sms-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_secure_password_2026
+      MYSQL_DATABASE: student_management_system
+      MYSQL_USER: sms_user
+      MYSQL_PASSWORD: sms_app_password_2026
+    ports:
+      - "3306:3306"
+    volumes:
+      - sms_mysql_data:/var/lib/mysql
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+
+volumes:
+  sms_mysql_data:
+    driver: local

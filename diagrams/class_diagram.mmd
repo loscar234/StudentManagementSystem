@@ -1,0 +1,404 @@
+classDiagram
+    direction TB
+
+    %% ================================================================
+    %% ABSTRACT BASE CLASS
+    %% ================================================================
+    class Person {
+        <<abstract>>
+        #int id
+        #String firstName
+        #String lastName
+        #String email
+        #String phone
+        #String gender
+        #LocalDate dateOfBirth
+        #String address
+        +getFullName() String
+        +getRole()* String
+        +toString() String
+    }
+
+    %% ================================================================
+    %% CONCRETE PERSON SUBCLASSES
+    %% ================================================================
+    class Student {
+        -String regNumber
+        -String programme
+        -int yearOfStudy
+        -int semester
+        -LocalDate enrollmentDate
+        -String status
+        -List~Course~ enrolledCourses
+        -List~Score~ scores
+        +registerCourse(Course) void
+        +deregisterCourse(Course) void
+        +addScore(Score) void
+        +computeAverageScore() double
+        +computeAverageGradePoint() double
+        +computeAverageGrade() String
+        +getRole() String
+    }
+
+    class Lecturer {
+        -String staffId
+        -String department
+        -String qualification
+        -String specialization
+        -LocalDate hireDate
+        -String status
+        -List~Course~ assignedCourses
+        +assignCourse(Course) void
+        +removeCourse(Course) void
+        +searchCourses(String) List~Course~
+        +getAssignedCourses() List~Course~
+        +getRole() String
+    }
+
+    %% ================================================================
+    %% DOMAIN CLASSES
+    %% ================================================================
+    class Course {
+        -int id
+        -String courseCode
+        -String title
+        -String description
+        -int creditHours
+        -String department
+        -int level
+        -int semester
+        +equals(Object) boolean
+        +hashCode() int
+        +toString() String
+    }
+
+    class Score {
+        -int id
+        -int studentId
+        -int courseId
+        -String courseCode
+        -String courseTitle
+        -String academicYear
+        -int semester
+        -double catScore
+        -double examScore
+        -String remarks
+        -int enteredBy
+        +getTotalScore() double
+        +getGrade() String
+        +getGradeRemark() String
+        +getGradePoint() double
+        +setCatScore(double) void
+        +setExamScore(double) void
+        +MAX_CAT$ double
+        +MAX_EXAM$ double
+    }
+
+    class Book {
+        -int id
+        -String isbn
+        -String title
+        -String author
+        -String edition
+        -String version
+        -int yearPublished
+        -String publisher
+        -String category
+        -int totalCopies
+        -int availableCopies
+        -String shelfLocation
+        +getBorrowedCopies() int
+        +isAvailable() boolean
+        +borrowCopy() void
+        +returnCopy() void
+        +equals(Object) boolean
+    }
+
+    class BorrowingRecord {
+        -int id
+        -int studentId
+        -String studentName
+        -int bookId
+        -String bookTitle
+        -LocalDate borrowDate
+        -LocalDate dueDate
+        -LocalDate returnDate
+        -String status
+        -double fineAmount
+        +FINE_PER_DAY$ double
+        +getOverdueDays() long
+        +computeFine() double
+        +isOverdue() boolean
+    }
+
+    %% ================================================================
+    %% DATA ACCESS OBJECTS (DAO)
+    %% ================================================================
+    class StudentDAO {
+        +insert(Student) void
+        +findById(int) Student
+        +findByRegNumber(String) Student
+        +findAll() List~Student~
+        +search(String) List~Student~
+        +update(Student) void
+        +delete(int) void
+        +registerCourse(int,int,String,int) void
+        +getEnrolledCourses(int,String,int) List~Course~
+    }
+
+    class LecturerDAO {
+        +insert(Lecturer) void
+        +findById(int) Lecturer
+        +findByStaffId(String) Lecturer
+        +findAll() List~Lecturer~
+        +search(String) List~Lecturer~
+        +update(Lecturer) void
+        +delete(int) void
+        +assignCourse(int,int,String,int) void
+        +getAssignedCourses(int,String,int) List~Course~
+    }
+
+    class CourseDAO {
+        +insert(Course) void
+        +findById(int) Course
+        +findByCode(String) Course
+        +findAll() List~Course~
+        +search(String) List~Course~
+        +update(Course) void
+        +delete(int) void
+    }
+
+    class ScoreDAO {
+        +upsert(Score) void
+        +findByStudent(int,String,int) List~Score~
+        +getResultSlip(String) List~Score~
+        +delete(int) void
+    }
+
+    class BookDAO {
+        +insertBook(Book) void
+        +findBookById(int) Book
+        +findAllBooks() List~Book~
+        +searchByTitle(String) List~Book~
+        +updateBook(Book) void
+        +deleteBook(int) void
+        +borrowBook(int,int) void
+        +returnBook(int) void
+        +reserveBook(int,int) void
+        +getBorrowingHistory(int) List~BorrowingRecord~
+        +getOverdueBooks() List~BorrowingRecord~
+        +getCurrentBorrowings() List~BorrowingRecord~
+    }
+
+    %% ================================================================
+    %% DATABASE CONNECTION
+    %% ================================================================
+    class DatabaseConnection {
+        <<singleton>>
+        -Connection instance$
+        -String URL$
+        -String USER$
+        -String PASSWORD$
+        +getInstance()$ Connection
+        +closeConnection()$ void
+    }
+
+    %% ================================================================
+    %% CONTROLLERS
+    %% ================================================================
+    class StudentController {
+        -StudentDAO studentDAO
+        -ScoreDAO scoreDAO
+        +registerStudent(...)  Student
+        +updateStudent(Student) void
+        +deleteStudent(int) void
+        +getStudentById(int) Student
+        +getAllStudents() List~Student~
+        +searchStudents(String) List~Student~
+        +registerCourse(int,int,String,int) void
+        +getEnrolledCourses(int,String,int) List~Course~
+        +enterScore(...) Score
+        +getScores(int,String,int) List~Score~
+        +generateResultSlip(String) Student
+        +getResultSlipData(String) List~Score~
+    }
+
+    class LecturerController {
+        -LecturerDAO lecturerDAO
+        +addLecturer(...) Lecturer
+        +updateLecturer(Lecturer) void
+        +deleteLecturer(int) void
+        +getLecturerById(int) Lecturer
+        +getAllLecturers() List~Lecturer~
+        +searchLecturers(String) List~Lecturer~
+        +assignCourse(int,int,String,int) void
+        +getAssignedCourses(int,String,int) List~Course~
+        +searchAssignedCourses(int,String,int,String) List~Course~
+    }
+
+    class CourseController {
+        -CourseDAO courseDAO
+        -StudentDAO studentDAO
+        -LecturerDAO lecturerDAO
+        +addCourse(...) Course
+        +updateCourse(Course) void
+        +deleteCourse(int) void
+        +getCourseById(int) Course
+        +getAllCourses() List~Course~
+        +searchCourses(String) List~Course~
+        +allocateCourseToStudent(int,int,String,int) void
+        +allocateCourseToLecturer(int,int,String,int) void
+    }
+
+    class LibraryController {
+        -BookDAO bookDAO
+        +addBook(...) Book
+        +updateBook(Book) void
+        +deleteBook(int) void
+        +getAllBooks() List~Book~
+        +searchBooks(String) List~Book~
+        +borrowBook(int,int) void
+        +returnBook(int) void
+        +reserveBook(int,int) void
+        +getBorrowingHistory(int) List~BorrowingRecord~
+        +getOverdueBooks() List~BorrowingRecord~
+        +getCurrentBorrowings() List~BorrowingRecord~
+    }
+
+    %% ================================================================
+    %% UTILITIES
+    %% ================================================================
+    class InputValidator {
+        <<utility>>
+        +validateName(String,String)$ void
+        +validateEmail(String)$ void
+        +validatePhone(String)$ void
+        +validateRegNumber(String)$ void
+        +validateStaffId(String)$ void
+        +validateCourseCode(String)$ void
+        +validateCatScore(double)$ void
+        +validateExamScore(double)$ void
+        +validateISBN(String)$ void
+        +parseDouble(String,String)$ double
+        +parseInt(String,String)$ int
+    }
+
+    class FileStorageManager {
+        <<utility>>
+        -String DATA_DIR$
+        +initialise()$ void
+        +saveStudent(Student)$ void
+        +saveAllStudents(List~Student~)$ void
+        +saveScore(Score)$ void
+        +generateResultSlip(Student,List~Score~)$ void
+        +saveBook(Book)$ void
+        +saveBorrowingRecord(BorrowingRecord)$ void
+        +log(String)$ void
+    }
+
+    %% ================================================================
+    %% VIEW CLASSES
+    %% ================================================================
+    class MainFrame {
+        -JTabbedPane tabbedPane
+        +main(String[])$ void
+    }
+
+    class StudentPanel {
+        -StudentController controller
+        -JTable studentTable
+        -JTextField fldSearch
+        +buildUI() void
+        +loadStudents() void
+        +performSearch() void
+        +saveStudent() void
+        +generateSlip() void
+    }
+
+    class LecturerPanel {
+        -LecturerController controller
+        -JTable lecturerTable
+        +loadLecturers() void
+        +performSearch() void
+    }
+
+    class CoursePanel {
+        -CourseController controller
+        -JTable courseTable
+        +loadCourses() void
+        +performSearch() void
+    }
+
+    class LibraryPanel {
+        -LibraryController controller
+        -JTable bookTable
+        -JTextField fldSearch
+        +loadBooks() void
+        +performSearch() void
+        +borrowBook() void
+        +returnBook() void
+        +reserveBook() void
+    }
+
+    class ResultSlipPanel {
+        -StudentController controller
+        -JTable resultTable
+        +generateSlip() void
+        +saveSlip() void
+    }
+
+    %% ================================================================
+    %% RELATIONSHIPS
+    %% ================================================================
+
+    %% Inheritance
+    Person <|-- Student : extends
+    Person <|-- Lecturer : extends
+
+    %% Associations (domain)
+    Student "1" o-- "0..5" Course : enrolledCourses
+    Student "1" o-- "0..*" Score : scores
+    Lecturer "1" o-- "0..*" Course : assignedCourses
+    Score "1" --> "1" Course : references
+    BorrowingRecord "1" --> "1" Book : references
+    BorrowingRecord "1" --> "1" Student : references
+
+    %% DAO uses DatabaseConnection
+    StudentDAO  --> DatabaseConnection : uses
+    LecturerDAO --> DatabaseConnection : uses
+    CourseDAO   --> DatabaseConnection : uses
+    ScoreDAO    --> DatabaseConnection : uses
+    BookDAO     --> DatabaseConnection : uses
+
+    %% Controller uses DAO
+    StudentController  --> StudentDAO  : uses
+    StudentController  --> ScoreDAO    : uses
+    LecturerController --> LecturerDAO : uses
+    CourseController   --> CourseDAO   : uses
+    CourseController   --> StudentDAO  : uses
+    CourseController   --> LecturerDAO : uses
+    LibraryController  --> BookDAO     : uses
+
+    %% Controller uses Utilities
+    StudentController  --> InputValidator    : validates
+    StudentController  --> FileStorageManager : persists
+    LecturerController --> InputValidator    : validates
+    LecturerController --> FileStorageManager : persists
+    CourseController   --> InputValidator    : validates
+    CourseController   --> FileStorageManager : persists
+    LibraryController  --> InputValidator    : validates
+    LibraryController  --> FileStorageManager : persists
+
+    %% View uses Controller
+    StudentPanel   --> StudentController  : delegates
+    LecturerPanel  --> LecturerController : delegates
+    CoursePanel    --> CourseController   : delegates
+    LibraryPanel   --> LibraryController  : delegates
+    ResultSlipPanel --> StudentController : delegates
+
+    %% Main frame contains panels
+    MainFrame --> StudentPanel    : contains
+    MainFrame --> LecturerPanel   : contains
+    MainFrame --> CoursePanel     : contains
+    MainFrame --> LibraryPanel    : contains
+    MainFrame --> ResultSlipPanel : contains

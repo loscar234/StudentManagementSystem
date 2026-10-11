@@ -1,0 +1,22 @@
+======================================================================
+                  UNIVERSITY STUDENT RESULT SLIP
+======================================================================
+  Name           : Bob Ochieng
+  Reg. Number    : CS/002/2023
+  Programme      : Bachelor of Science in Computer Science
+  Year / Semester: Year 2, Semester 1
+  Generated On   : 2026-10-11 20:31:05
+----------------------------------------------------------------------
+  Code       Course Title                      CAT   Exam  Total Grade
+----------------------------------------------------------------------
+  CS101      Introduction to Programming      18.0   40.0   58.0     C
+  CS201      Data Structures & Algorithms     15.0   35.0   50.0     C
+  IT201      Networking Fundamentals          24.0   50.0   74.0     A
+  IT301      Web Development                  20.0   48.0   68.0     B
+  SE201      Object-Oriented Programming      22.0   55.0   77.0     A
+----------------------------------------------------------------------
+  AVERAGE                                     65.40     B
+======================================================================
+  * A: 70-100 (Distinction)  B: 60-69 (Credit)  C: 50-59 (Pass)
+  * D: 40-49 (Marginal Pass)  F: 0-39 (Fail)
+======================================================================
