@@ -4,7 +4,7 @@ set -e
 echo "Compiling Java sources..."
 mkdir -p out/production/StudentManagementSystem
 find src -name "*.java" > sources.txt
-javac -cp "lib/*:src" -d out/production/StudentManagementSystem @sources.txt
+javac --release 17 -cp "lib/*:src" -d out/production/StudentManagementSystem @sources.txt
 rm sources.txt
 
 echo "Preparing distribution packaging..."

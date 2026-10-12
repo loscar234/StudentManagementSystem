@@ -1,7 +1,7 @@
 # Build script to create standalone executable JAR
 Write-Host "Compiling Java sources..."
 $javaFiles = Get-ChildItem -Path src -Recurse -Filter *.java | Select-Object -ExpandProperty FullName
-javac -cp "lib/*;src" -d out/production/StudentManagementSystem $javaFiles
+javac --release 17 -cp "lib/*;src" -d out/production/StudentManagementSystem $javaFiles
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Compilation failed."

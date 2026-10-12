@@ -1,6 +1,6 @@
 FROM eclipse-temurin:17-jdk-jammy
 
-# Install Xvfb, x11vnc, openbox, novnc, websockify for web-based GUI streaming
+# Install Xvfb, x11vnc, openbox, novnc, websockify, unzip for web-based GUI streaming
 RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb \
     x11vnc \
@@ -9,22 +9,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     websockify \
     net-tools \
     curl \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy application libraries, distribution JAR, and scripts
+# Copy application libraries, sources, schema, and scripts
 COPY lib/ lib/
 COPY src/ src/
 COPY sql/ sql/
-COPY dist/ dist/
 COPY build-jar.sh build-jar.sh
 COPY entrypoint.sh entrypoint.sh
 
 RUN chmod +x entrypoint.sh build-jar.sh
 
-# If dist/StudentManagementSystem.jar is missing, compile and build it
-RUN if [ ! -f dist/StudentManagementSystem.jar ]; then ./build-jar.sh; fi
+# Build executable standalone JAR inside container using JDK 17
+RUN ./build-jar.sh
 
 # Expose noVNC web port
 EXPOSE 6080

@@ -18,6 +18,7 @@ if [ -n "$SMS_DB_HOST" ]; then
     done
 fi
 
+rm -f /tmp/.X0-lock /tmp/.X11-unix/X0
 echo "Starting Xvfb virtual framebuffer on display :0..."
 Xvfb :0 -screen 0 ${SCREEN_WIDTH:-1366}x${SCREEN_HEIGHT:-768}x${SCREEN_DEPTH:-24} &
 sleep 2
