@@ -1,4 +1,4 @@
-﻿services:
+services:
   sms-db:
     image: mysql:8.0
     container_name: sms-mysql
@@ -17,6 +17,23 @@
       - --default-authentication-plugin=mysql_native_password
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
+
+  sms-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sms-web-app
+    restart: unless-stopped
+    depends_on:
+      - sms-db
+    environment:
+      SMS_DB_HOST: sms-db
+      SMS_DB_PORT: 3306
+      SMS_DB_NAME: student_management_system
+      SMS_DB_USER: sms_user
+      SMS_DB_PASSWORD: sms_app_password_2026
+    ports:
+      - "6080:6080"
 
 volumes:
   sms_mysql_data:

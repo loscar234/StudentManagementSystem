@@ -1,6 +1,7 @@
-﻿# Compiled class files
+# Compiled class files & distribution artifacts
 out/
 bin/
+dist/
 *.class
 
 # IntelliJ IDEA files
