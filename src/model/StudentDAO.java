@@ -296,15 +296,6 @@ public class StudentDAO {
         }
     }
 
-    /**
-     * Deregisters a course for a student for a specific academic year and semester.
-     *
-     * @param studentId    student primary key
-     * @param courseId     course primary key
-     * @param academicYear academic year
-     * @param semester     semester
-     * @throws SQLException on database error
-     */
     public void deregisterCourse(int studentId, int courseId, String academicYear, int semester) throws SQLException {
         String sql = "DELETE FROM student_courses WHERE student_id = ? AND course_id = ? AND academic_year = ? AND semester = ?";
         try (Connection conn = DatabaseConnection.getConnection();
@@ -314,6 +305,111 @@ public class StudentDAO {
             ps.setString(3, academicYear);
             ps.setInt(4, semester);
             ps.executeUpdate();
+        }
+    }
+
+    /**
+     * Checks if a student is already enrolled in a specific course for the given term.
+     */
+    public boolean isEnrolled(int studentId, int courseId, String academicYear, int semester) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM student_courses WHERE student_id = ? AND course_id = ? AND academic_year = ? AND semester = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, studentId);
+            ps.setInt(2, courseId);
+            ps.setString(3, academicYear);
+            ps.setInt(4, semester);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Returns total courses enrolled by the student in the specified term.
+     */
+    public int getEnrolledCourseCount(int studentId, String academicYear, int semester) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM student_courses WHERE student_id = ? AND academic_year = ? AND semester = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, studentId);
+            ps.setString(2, academicYear);
+            ps.setInt(3, semester);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Registers a student for a course under an authorized exception (e.g. late registration or closed term override).
+     * Invokes sp_register_student_course_exception and logs to academic_audit_log.
+     */
+    public void registerCourseException(int studentId, int courseId, String academicYear, int semester,
+                                        int authorizedBy, String authorizedUser, String reason) throws SQLException {
+        String sql = "CALL sp_register_student_course_exception(?, ?, ?, ?, ?, ?, ?)";
+        try (Connection conn = DatabaseConnection.getConnection();
+             CallableStatement cs = conn.prepareCall(sql)) {
+            cs.setInt(1, studentId);
+            cs.setInt(2, courseId);
+            cs.setString(3, academicYear);
+            cs.setInt(4, semester);
+            cs.setInt(5, authorizedBy);
+            cs.setString(6, authorizedUser);
+            cs.setString(7, reason);
+            cs.execute();
+        }
+    }
+
+    /**
+     * Deregisters a course for a student under an authorized administrative action.
+     * Removes the enrollment and creates an immutable entry in academic_audit_log.
+     */
+    public void deregisterCourseWithException(int studentId, int courseId, String academicYear, int semester,
+                                              int authorizedBy, String authorizedUser, String reason) throws SQLException {
+        String deleteSql = "DELETE FROM student_courses WHERE student_id = ? AND course_id = ? AND academic_year = ? AND semester = ?";
+        String auditSql = "INSERT INTO academic_audit_log (entity_type, student_id, course_id, academic_year, semester, " +
+                "action, previous_value, new_value, reason, authorized_by, authorized_user) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                try (PreparedStatement ps = conn.prepareStatement(deleteSql)) {
+                    ps.setInt(1, studentId);
+                    ps.setInt(2, courseId);
+                    ps.setString(3, academicYear);
+                    ps.setInt(4, semester);
+                    ps.executeUpdate();
+                }
+
+                try (PreparedStatement psAudit = conn.prepareStatement(auditSql)) {
+                    psAudit.setString(1, "ENROLLMENT");
+                    psAudit.setInt(2, studentId);
+                    psAudit.setInt(3, courseId);
+                    psAudit.setString(4, academicYear);
+                    psAudit.setInt(5, semester);
+                    psAudit.setString(6, "AUTHORIZED_COURSE_DROP");
+                    psAudit.setString(7, "Enrolled course_id=" + courseId);
+                    psAudit.setString(8, "DROPPED");
+                    psAudit.setString(9, reason != null && !reason.trim().isEmpty() ? reason.trim() : "Authorized course drop");
+                    psAudit.setInt(10, authorizedBy);
+                    psAudit.setString(11, authorizedUser != null ? authorizedUser : "SYSTEM");
+                    psAudit.executeUpdate();
+                }
+
+                conn.commit();
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
         }
     }
 

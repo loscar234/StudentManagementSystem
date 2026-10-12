@@ -4,6 +4,7 @@ import controller.StudentController;
 import model.Course;
 import model.Score;
 import model.Student;
+import util.AccessDeniedException;
 import util.SessionManager;
 
 import javax.swing.*;
@@ -248,6 +249,12 @@ public class StudentPanel extends JPanel {
         btnDelete = UITheme.dangerButton("Delete");
         btnClear  = UITheme.successButton("Clear");
 
+        SessionManager.Role role = SessionManager.getInstance().getCurrentRole();
+        boolean canManage = (role == SessionManager.Role.ADMIN || role == SessionManager.Role.REGISTRAR);
+        btnSave.setEnabled(canManage);
+        btnUpdate.setEnabled(canManage);
+        btnDelete.setEnabled(canManage);
+
         btnSave.addActionListener(e -> saveStudent());
         btnUpdate.addActionListener(e -> updateStudent());
         btnDelete.addActionListener(e -> deleteStudent());
@@ -275,7 +282,13 @@ public class StudentPanel extends JPanel {
         cmbCoursesSemester = UITheme.styledCombo(new String[]{"1", "2"});
 
         JButton btnViewCourses = UITheme.primaryButton("View Courses");
+        JButton btnLateRegister = UITheme.warningButton("Authorized Late Add");
         JButton btnDropCourse = UITheme.dangerButton("Drop Course");
+
+        SessionManager.Role currentRole = SessionManager.getInstance().getCurrentRole();
+        boolean canManageCourses = (currentRole == SessionManager.Role.ADMIN || currentRole == SessionManager.Role.REGISTRAR);
+        btnDropCourse.setEnabled(canManageCourses);
+        btnLateRegister.setEnabled(canManageCourses);
 
         String[] colsCourse = {"Code", "Title", "Credits", "Department", "Level"};
         DefaultTableModel courseModel = new DefaultTableModel(colsCourse, 0) {
@@ -301,10 +314,63 @@ public class StudentPanel extends JPanel {
                     });
                 }
                 if (courses.isEmpty()) showInfo("No courses enrolled for this student in " + acadYear + " Sem " + sem + ".");
+            } catch (AccessDeniedException ex) {
+                showError("Access Denied: " + ex.getMessage());
             } catch (SQLException ex) {
                 showError("Database Error loading courses: " + ex.getMessage());
             } catch (Exception ex) {
                 showError("Error loading courses: " + ex.getMessage());
+            }
+        });
+
+        btnLateRegister.addActionListener(e -> {
+            if (selectedStudentId < 0) {
+                showError("Please select a student first.");
+                return;
+            }
+            String acadYear = (String) cmbCoursesAcadYear.getSelectedItem();
+            int sem = Integer.parseInt((String) cmbCoursesSemester.getSelectedItem());
+
+            JTextField fldCourseCode = new JTextField();
+            JTextField fldReason = new JTextField();
+            Object[] message = {
+                "Academic Period: " + acadYear + " Semester " + sem,
+                "Course Code (e.g. CS101):", fldCourseCode,
+                "Justification Reason (Mandatory):", fldReason
+            };
+
+            int option = JOptionPane.showConfirmDialog(this, message, "Authorized Exception / Late Course Registration",
+                    JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            if (option == JOptionPane.OK_OPTION) {
+                String code = fldCourseCode.getText().trim();
+                String reason = fldReason.getText().trim();
+                if (code.isEmpty()) {
+                    showError("Course code is required.");
+                    return;
+                }
+                if (reason.isEmpty()) {
+                    showError("A justification reason is strictly required for exception registration.");
+                    return;
+                }
+                try {
+                    Course course = controller.getCourseByCode(code);
+                    if (course == null) {
+                        showError("Course not found: " + code);
+                        return;
+                    }
+                    controller.registerCourseWithException(selectedStudentId, course.getId(), acadYear, sem, reason);
+                    showInfo("Course " + code + " registered successfully under authorized exception!");
+                    btnViewCourses.doClick();
+                    refreshScoreCourseList();
+                } catch (AccessDeniedException ex) {
+                    showError("Access Denied: " + ex.getMessage());
+                } catch (IllegalArgumentException | IllegalStateException ex) {
+                    showError("Validation Error: " + ex.getMessage());
+                } catch (SQLException ex) {
+                    showError("Database Error registering course: " + ex.getMessage());
+                } catch (Exception ex) {
+                    showError("Error: " + ex.getMessage());
+                }
             }
         });
 
@@ -324,10 +390,13 @@ public class StudentPanel extends JPanel {
             String acadYear = (String) cmbCoursesAcadYear.getSelectedItem();
             int sem = Integer.parseInt((String) cmbCoursesSemester.getSelectedItem());
 
-            int confirm = JOptionPane.showConfirmDialog(this,
-                "Are you sure you want to drop course " + courseCode + " (" + courseTitle + ") for " + acadYear + " Semester " + sem + "?",
-                "Confirm Drop Course", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-            if (confirm != JOptionPane.YES_OPTION) return;
+            String reason = JOptionPane.showInputDialog(this,
+                "Enter documented justification for dropping course " + courseCode + " (" + courseTitle + "):\n(Preserved in audit log)",
+                "Document Course Drop", JOptionPane.QUESTION_MESSAGE);
+            if (reason == null || reason.trim().isEmpty()) {
+                showError("Course drop cancelled: A documented justification reason is required.");
+                return;
+            }
 
             try {
                 Course course = controller.getCourseByCode(courseCode);
@@ -335,12 +404,14 @@ public class StudentPanel extends JPanel {
                     showError("Could not find course in database: " + courseCode);
                     return;
                 }
-                controller.deregisterCourse(selectedStudentId, course.getId(), acadYear, sem);
-                showInfo("Course " + courseCode + " dropped successfully!");
+                controller.deregisterCourseWithException(selectedStudentId, course.getId(), acadYear, sem, reason.trim());
+                showInfo("Course " + courseCode + " dropped and documented in audit log.");
 
                 // Refresh courses table and score dropdown
                 btnViewCourses.doClick();
                 refreshScoreCourseList();
+            } catch (AccessDeniedException ex) {
+                showError("Access Denied: " + ex.getMessage());
             } catch (IllegalArgumentException ex) {
                 showError("Validation Error: " + ex.getMessage());
             } catch (SQLException ex) {
@@ -357,6 +428,7 @@ public class StudentPanel extends JPanel {
         top.add(new JLabel("Sem:"));
         top.add(cmbCoursesSemester);
         top.add(btnViewCourses);
+        top.add(btnLateRegister);
         top.add(btnDropCourse);
 
         panel.add(top, BorderLayout.NORTH);
@@ -397,17 +469,26 @@ public class StudentPanel extends JPanel {
 
         btnEnterScore = UITheme.primaryButton("Save Score");
         btnViewScores = UITheme.successButton("View Scores");
+        JButton btnCorrectScore = UITheme.warningButton("Authorized Correction");
+        JButton btnFinalizeScores = UITheme.dangerButton("Finalize Course Scores");
+
+        SessionManager.Role userRole = SessionManager.getInstance().getCurrentRole();
+        boolean canAuthorizeScore = (userRole == SessionManager.Role.ADMIN || userRole == SessionManager.Role.APPROVER || userRole == SessionManager.Role.REGISTRAR);
+        btnCorrectScore.setEnabled(canAuthorizeScore);
+        btnFinalizeScores.setEnabled(canAuthorizeScore);
 
         JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.LEFT));
         btnRow.setBackground(UITheme.SURFACE);
         btnRow.add(btnEnterScore);
         btnRow.add(btnViewScores);
+        btnRow.add(btnCorrectScore);
+        btnRow.add(btnFinalizeScores);
 
         gbc.gridx = 0; gbc.gridy = 5; gbc.gridwidth = 2;
         entryForm.add(btnRow, gbc);
 
         // Score results table
-        String[] cols = {"Course Code", "Course Title", "CAT", "Exam", "Total", "Grade", "Remark"};
+        String[] cols = {"ID", "Course Code", "Course Title", "CAT", "Exam", "Total", "Grade", "Remark", "Status"};
         DefaultTableModel scoreModel = new DefaultTableModel(cols, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
@@ -437,6 +518,11 @@ public class StudentPanel extends JPanel {
 
                 showInfo("Score saved successfully!");
                 fldCatScore.setText(""); fldExamScore.setText("");
+                btnViewScores.doClick();
+            } catch (AccessDeniedException ex) {
+                showError("Access Denied: " + ex.getMessage());
+            } catch (IllegalStateException ex) {
+                showError("Score Finalized / Locked: " + ex.getMessage());
             } catch (NumberFormatException ex) {
                 showError("Validation Error: Please enter valid numeric scores for CAT and Exam.");
             } catch (IllegalArgumentException ex) {
@@ -445,6 +531,87 @@ public class StudentPanel extends JPanel {
                 showError("Database Error saving score: " + ex.getMessage());
             } catch (Exception ex) {
                 showError("Unexpected Error saving score: " + ex.getMessage());
+            }
+        });
+
+        btnCorrectScore.addActionListener(e -> {
+            int selectedRow = scoreTable.getSelectedRow();
+            if (selectedRow < 0) {
+                showError("Please select a score record from the table to correct.");
+                return;
+            }
+            int scoreId = (int) scoreModel.getValueAt(selectedRow, 0);
+            String courseCode = (String) scoreModel.getValueAt(selectedRow, 1);
+            String currentCat = (String) scoreModel.getValueAt(selectedRow, 3);
+            String currentExam = (String) scoreModel.getValueAt(selectedRow, 4);
+
+            JTextField fldNewCat = new JTextField(currentCat);
+            JTextField fldNewExam = new JTextField(currentExam);
+            JTextField fldReason = new JTextField();
+            Object[] message = {
+                "Correcting Score for: " + courseCode,
+                "New CAT Score (0-30):", fldNewCat,
+                "New Exam Score (0-70):", fldNewExam,
+                "Official Justification Reason (Mandatory):", fldReason
+            };
+
+            int option = JOptionPane.showConfirmDialog(this, message, "Authorized Score Correction",
+                    JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            if (option == JOptionPane.OK_OPTION) {
+                try {
+                    double nCat = Double.parseDouble(fldNewCat.getText().trim());
+                    double nExam = Double.parseDouble(fldNewExam.getText().trim());
+                    String reason = fldReason.getText().trim();
+                    if (reason.isEmpty()) {
+                        showError("A justification reason is strictly required.");
+                        return;
+                    }
+                    controller.correctScore(scoreId, nCat, nExam, reason);
+                    showInfo("Score correction successfully logged and updated!");
+                    btnViewScores.doClick();
+                } catch (AccessDeniedException ex) {
+                    showError("Access Denied: " + ex.getMessage());
+                } catch (NumberFormatException ex) {
+                    showError("Please enter valid numeric scores.");
+                } catch (IllegalArgumentException ex) {
+                    showError("Validation Error: " + ex.getMessage());
+                } catch (SQLException ex) {
+                    showError("Database Error: " + ex.getMessage());
+                } catch (Exception ex) {
+                    showError("Error: " + ex.getMessage());
+                }
+            }
+        });
+
+        btnFinalizeScores.addActionListener(e -> {
+            String courseEntry = (String) cmbScoreCourse.getSelectedItem();
+            if (courseEntry == null) { showError("Please select a course to finalize."); return; }
+            String[] parts = courseEntry.split(" - ");
+            String courseCode = parts[0].trim();
+            String acadYear = (String) cmbScoreAcadYear.getSelectedItem();
+            int sem = Integer.parseInt((String) cmbScoreSemester.getSelectedItem());
+
+            int conf = JOptionPane.showConfirmDialog(this,
+                "Are you sure you want to officially FINALIZE scores for " + courseCode + " in " + acadYear + " Semester " + sem + "?\n" +
+                "This will lock regular score entry; future modifications will require authorized corrections.",
+                "Confirm Finalize Scores", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+            if (conf != JOptionPane.YES_OPTION) return;
+
+            try {
+                Course course = controller.getCourseByCode(courseCode);
+                if (course == null) {
+                    showError("Course not found: " + courseCode);
+                    return;
+                }
+                int count = controller.finalizeCourseScores(acadYear, sem, course.getId());
+                showInfo("Successfully finalized " + count + " score records for " + courseCode + "!");
+                btnViewScores.doClick();
+            } catch (AccessDeniedException ex) {
+                showError("Access Denied: " + ex.getMessage());
+            } catch (SQLException ex) {
+                showError("Database Error: " + ex.getMessage());
+            } catch (Exception ex) {
+                showError("Error: " + ex.getMessage());
             }
         });
 
@@ -457,14 +624,18 @@ public class StudentPanel extends JPanel {
                 scoreModel.setRowCount(0);
                 for (Score sc : scores) {
                     scoreModel.addRow(new Object[]{
+                        sc.getId(),
                         sc.getCourseCode(), sc.getCourseTitle(),
                         String.format("%.1f", sc.getCatScore()),
                         String.format("%.1f", sc.getExamScore()),
                         String.format("%.1f", sc.getTotalScore()),
-                        sc.getGrade(), sc.getGradeRemark()
+                        sc.getGrade(), sc.getGradeRemark(),
+                        sc.getStatus() != null ? sc.getStatus() : "DRAFT"
                     });
                 }
                 if (scores.isEmpty()) showInfo("No scores found for this student in " + acadYear + " Sem " + sem + ".");
+            } catch (AccessDeniedException ex) {
+                showError("Access Denied: " + ex.getMessage());
             } catch (SQLException ex) {
                 showError("Database Error loading scores: " + ex.getMessage());
             } catch (Exception ex) {
@@ -508,6 +679,8 @@ public class StudentPanel extends JPanel {
                     s.getProgramme(), s.getYearOfStudy(), s.getSemester(), s.getStatus()
                 });
             }
+        } catch (AccessDeniedException e) {
+            showError("Access Denied: " + e.getMessage());
         } catch (IllegalArgumentException e) {
             showError("Validation Error: " + e.getMessage());
         } catch (SQLException e) {
@@ -531,6 +704,8 @@ public class StudentPanel extends JPanel {
             showInfo("Student registered successfully! ID: " + s.getId());
             clearForm();
             loadStudents();
+        } catch (AccessDeniedException e) {
+            showError("Access Denied: " + e.getMessage());
         } catch (IllegalArgumentException e) {
             showError("Validation Error: " + e.getMessage());
         } catch (SQLException e) {
@@ -560,6 +735,8 @@ public class StudentPanel extends JPanel {
             controller.updateStudent(s);
             showInfo("Student updated successfully!");
             loadStudents();
+        } catch (AccessDeniedException e) {
+            showError("Access Denied: " + e.getMessage());
         } catch (IllegalArgumentException e) {
             showError("Validation Error: " + e.getMessage());
         } catch (SQLException e) {
@@ -580,6 +757,8 @@ public class StudentPanel extends JPanel {
             showInfo("Student deleted.");
             clearForm();
             loadStudents();
+        } catch (AccessDeniedException e) {
+            showError("Access Denied: " + e.getMessage());
         } catch (IllegalArgumentException e) {
             showError("Validation Error: " + e.getMessage());
         } catch (SQLException e) {

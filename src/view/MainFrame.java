@@ -2,6 +2,7 @@ package view;
 
 import db.DatabaseConnection;
 import util.FileStorageManager;
+import util.SessionManager;
 
 import javax.swing.*;
 import java.awt.*;
@@ -11,9 +12,8 @@ import java.sql.SQLException;
 /**
  * MainFrame – The primary application window for the Student Management System.
  *
- * <p>Uses a {@link JTabbedPane} to host the five main functional panels:
- * Students, Lecturers, Courses, Library, and Result Slip. This class
- * serves as the top-level View in the MVC architecture.</p>
+ * <p>Uses a {@link JTabbedPane} to host functional panels filtered dynamically
+ * by the authenticated user's role (RBAC). Provides session awareness and logout.</p>
  */
 public class MainFrame extends JFrame {
 
@@ -46,19 +46,41 @@ public class MainFrame extends JFrame {
             "Student Management System",
             "University of Technology  |  Academic Year 2024/2025"
         );
+
+        // Header User Context & Logout
+        if (SessionManager.getInstance().isAuthenticated()) {
+            JPanel userPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 15));
+            userPanel.setOpaque(false);
+
+            JLabel lblUser = new JLabel(String.format("👤 %s (%s)",
+                SessionManager.getInstance().getUsername(),
+                SessionManager.getInstance().getCurrentRole()));
+            lblUser.setFont(UITheme.FONT_SUBTITLE);
+            lblUser.setForeground(Color.WHITE);
+
+            JButton btnLogout = new JButton("Logout");
+            btnLogout.setFont(UITheme.FONT_BUTTON);
+            btnLogout.setBackground(new Color(220, 53, 69));
+            btnLogout.setForeground(Color.WHITE);
+            btnLogout.setFocusPainted(false);
+            btnLogout.setBorderPainted(false);
+            btnLogout.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            btnLogout.setPreferredSize(new Dimension(90, 32));
+            btnLogout.addActionListener(e -> handleLogout());
+
+            userPanel.add(lblUser);
+            userPanel.add(btnLogout);
+            header.add(userPanel, BorderLayout.EAST);
+        }
+
         add(header, BorderLayout.NORTH);
 
-        // ---- Tabbed content area ----
+        // ---- Tabbed content area (Role Filtered) ----
         tabbedPane = new JTabbedPane(JTabbedPane.TOP);
         tabbedPane.setBackground(UITheme.BACKGROUND);
         tabbedPane.setFont(UITheme.FONT_SUBTITLE);
 
-        tabbedPane.addTab("  Students  ",   createIcon("student"),  new StudentPanel());
-        tabbedPane.addTab("  Lecturers  ",  createIcon("lecturer"), new LecturerPanel());
-        tabbedPane.addTab("  Courses  ",    createIcon("course"),   new CoursePanel());
-        tabbedPane.addTab("  Library  ",    createIcon("library"),  new LibraryPanel());
-        tabbedPane.addTab("  Result Slip  ",createIcon("result"),   new ResultSlipPanel());
-
+        configureTabsForRole();
         add(tabbedPane, BorderLayout.CENTER);
 
         // ---- Status bar ----
@@ -82,6 +104,71 @@ public class MainFrame extends JFrame {
     }
 
     /**
+     * Dynamically populates tabs according to the authenticated user's role.
+     */
+    private void configureTabsForRole() {
+        SessionManager.Role role = SessionManager.getInstance().getCurrentRole();
+        if (role == null) {
+            tabbedPane.addTab("  Students  ", createIcon("student"), new StudentPanel());
+            return;
+        }
+
+        switch (role) {
+            case ADMIN -> {
+                tabbedPane.addTab("  Students  ",    createIcon("student"),  new StudentPanel());
+                tabbedPane.addTab("  Lecturers  ",   createIcon("lecturer"), new LecturerPanel());
+                tabbedPane.addTab("  Courses  ",     createIcon("course"),   new CoursePanel());
+                tabbedPane.addTab("  Library  ",     createIcon("library"),  new LibraryPanel());
+                tabbedPane.addTab("  Result Slip  ", createIcon("result"),   new ResultSlipPanel());
+            }
+            case REGISTRAR -> {
+                tabbedPane.addTab("  Students  ",    createIcon("student"),  new StudentPanel());
+                tabbedPane.addTab("  Courses  ",     createIcon("course"),   new CoursePanel());
+                tabbedPane.addTab("  Result Slip  ", createIcon("result"),   new ResultSlipPanel());
+            }
+            case LECTURER -> {
+                tabbedPane.addTab("  Students & Marks  ", createIcon("student"),  new StudentPanel());
+                tabbedPane.addTab("  Assigned Courses  ", createIcon("course"),   new CoursePanel());
+                tabbedPane.addTab("  Result Slip  ",      createIcon("result"),   new ResultSlipPanel());
+            }
+            case LIBRARIAN -> {
+                tabbedPane.addTab("  Library System  ", createIcon("library"),  new LibraryPanel());
+            }
+            case APPROVER -> {
+                tabbedPane.addTab("  Students  ",    createIcon("student"),  new StudentPanel());
+                tabbedPane.addTab("  Result Slip  ", createIcon("result"),   new ResultSlipPanel());
+            }
+        }
+    }
+
+    /**
+     * Prompts for confirmation and logs the user out.
+     */
+    private void handleLogout() {
+        int confirm = JOptionPane.showConfirmDialog(
+            this,
+            "Are you sure you want to log out of the system?",
+            "Confirm Logout",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.QUESTION_MESSAGE
+        );
+        if (confirm == JOptionPane.YES_OPTION) {
+            SessionManager.getInstance().logout();
+            dispose();
+            SwingUtilities.invokeLater(() -> {
+                LoginDialog loginDialog = new LoginDialog(null);
+                loginDialog.setVisible(true);
+                if (loginDialog.isAuthenticated()) {
+                    MainFrame frame = new MainFrame();
+                    frame.setVisible(true);
+                } else {
+                    System.exit(0);
+                }
+            });
+        }
+    }
+
+    /**
      * Checks database connectivity via HikariCP and updates the status bar label.
      */
     private void updateConnectionStatus(JLabel statusLabel) {
@@ -99,11 +186,15 @@ public class MainFrame extends JFrame {
             protected void done() {
                 try {
                     boolean connected = get();
+                    String userBadge = SessionManager.getInstance().isAuthenticated()
+                        ? "  |  Logged in as: " + SessionManager.getInstance().getUsername()
+                          + " [" + SessionManager.getInstance().getCurrentRole() + "]"
+                        : "";
                     if (connected) {
-                        statusLabel.setText("🟢 Connected to DB  |  student_management_system");
+                        statusLabel.setText("🟢 Connected to DB  |  student_management_system" + userBadge);
                         statusLabel.setForeground(new Color(180, 250, 180));
                     } else {
-                        statusLabel.setText("🔴 DB Disconnected  |  Check Database & Pool");
+                        statusLabel.setText("🔴 DB Disconnected  |  Check Database & Pool" + userBadge);
                         statusLabel.setForeground(new Color(255, 180, 180));
                     }
                 } catch (Exception e) {
@@ -143,12 +234,19 @@ public class MainFrame extends JFrame {
     // ---------------------------------------------------------------
 
     /**
-     * Application entry point.
+     * Application entry point with secure authentication check.
      *
      * @param args command-line arguments (not used)
      */
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
+            LoginDialog loginDialog = new LoginDialog(null);
+            loginDialog.setVisible(true);
+
+            if (!loginDialog.isAuthenticated()) {
+                System.exit(0);
+            }
+
             MainFrame frame = new MainFrame();
             frame.setVisible(true);
         });

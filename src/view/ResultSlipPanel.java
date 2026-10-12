@@ -3,6 +3,7 @@ package view;
 import controller.StudentController;
 import model.Score;
 import model.Student;
+import util.AccessDeniedException;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -247,6 +248,8 @@ public class ResultSlipPanel extends JPanel {
             lblGenerated.setText("Generated: " + LocalDateTime.now().format(
                 DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm")));
 
+        } catch (AccessDeniedException e) {
+            showError("Access Denied: " + e.getMessage());
         } catch (SQLException e) {
             showError("Database error: " + e.getMessage());
         }
@@ -258,6 +261,8 @@ public class ResultSlipPanel extends JPanel {
         try {
             controller.generateResultSlip(reg);
             showInfo("Result slip saved to file: data/result_slip_" + reg.replace("/", "_") + ".txt");
+        } catch (AccessDeniedException e) {
+            showError("Access Denied: " + e.getMessage());
         } catch (Exception e) {
             showError("Error saving slip: " + e.getMessage());
         }

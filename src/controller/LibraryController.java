@@ -3,6 +3,8 @@ package controller;
 import model.*;
 import util.FileStorageManager;
 import util.InputValidator;
+import util.SecurityContext;
+import util.SessionManager;
 
 import java.sql.SQLException;
 import java.util.List;
@@ -30,6 +32,7 @@ public class LibraryController {
                         String version, int yearPublished, String publisher,
                         String category, int totalCopies, String shelfLocation)
             throws SQLException {
+        SecurityContext.requireAnyRole(SessionManager.Role.ADMIN, SessionManager.Role.LIBRARIAN);
 
         InputValidator.validateISBN(isbn);
         InputValidator.validateRequired(title, "Book title");
@@ -49,6 +52,8 @@ public class LibraryController {
     }
 
     public void updateBook(Book book) throws SQLException {
+        SecurityContext.requireAnyRole(SessionManager.Role.ADMIN, SessionManager.Role.LIBRARIAN);
+
         InputValidator.validateISBN(book.getIsbn());
         InputValidator.validateRequired(book.getTitle(), "Book title");
         bookDAO.updateBook(book);
@@ -56,6 +61,8 @@ public class LibraryController {
     }
 
     public void deleteBook(int bookId) throws SQLException {
+        SecurityContext.requireAnyRole(SessionManager.Role.ADMIN, SessionManager.Role.LIBRARIAN);
+
         Book b = bookDAO.findBookById(bookId);
         if (b == null) throw new IllegalArgumentException("Book not found: ID " + bookId);
         bookDAO.deleteBook(bookId);
@@ -67,6 +74,7 @@ public class LibraryController {
     // ---------------------------------------------------------------
 
     public List<Book> getAllBooks() throws SQLException {
+        SecurityContext.requireAuthenticated();
         return bookDAO.findAllBooks();
     }
 
@@ -78,6 +86,7 @@ public class LibraryController {
      * @throws SQLException on database error
      */
     public List<Book> searchBooks(String keyword) throws SQLException {
+        SecurityContext.requireAuthenticated();
         if (keyword == null || keyword.trim().isEmpty()) {
             return bookDAO.findAllBooks();
         }
@@ -98,6 +107,8 @@ public class LibraryController {
      * @throws IllegalStateException    if no copies available (caught by View to offer reservation)
      */
     public void borrowBook(int studentId, int bookId) throws SQLException {
+        SecurityContext.requireAnyRole(SessionManager.Role.ADMIN, SessionManager.Role.LIBRARIAN);
+
         Book book = bookDAO.findBookById(bookId);
         if (book == null) throw new IllegalArgumentException("Book not found: ID " + bookId);
 
@@ -121,6 +132,7 @@ public class LibraryController {
      * @throws SQLException on database error
      */
     public void returnBook(int recordId) throws SQLException {
+        SecurityContext.requireAnyRole(SessionManager.Role.ADMIN, SessionManager.Role.LIBRARIAN);
         bookDAO.returnBook(recordId);
         FileStorageManager.log("Book returned: Record ID " + recordId);
     }
@@ -137,6 +149,7 @@ public class LibraryController {
      * @throws SQLException on database error
      */
     public void reserveBook(int studentId, int bookId) throws SQLException {
+        SecurityContext.requireAnyRole(SessionManager.Role.ADMIN, SessionManager.Role.LIBRARIAN);
         Book book = bookDAO.findBookById(bookId);
         if (book == null) throw new IllegalArgumentException("Book not found: ID " + bookId);
 
@@ -149,14 +162,17 @@ public class LibraryController {
     // ---------------------------------------------------------------
 
     public List<BorrowingRecord> getBorrowingHistory(int studentId) throws SQLException {
+        SecurityContext.requireAuthenticated();
         return bookDAO.getBorrowingHistory(studentId);
     }
 
     public List<BorrowingRecord> getOverdueBooks() throws SQLException {
+        SecurityContext.requireAuthenticated();
         return bookDAO.getOverdueBooks();
     }
 
     public List<BorrowingRecord> getCurrentBorrowings() throws SQLException {
+        SecurityContext.requireAuthenticated();
         return bookDAO.getCurrentBorrowings();
     }
 }

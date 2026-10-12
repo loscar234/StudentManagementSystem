@@ -3,6 +3,8 @@ package view;
 import controller.LecturerController;
 import model.Course;
 import model.Lecturer;
+import util.AccessDeniedException;
+import util.SessionManager;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -168,10 +170,17 @@ public class LecturerPanel extends JPanel {
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 10));
         btnPanel.setBackground(UITheme.BACKGROUND);
 
+        SessionManager.Role currentRole = SessionManager.getInstance().getCurrentRole();
+        boolean canManage = (currentRole == SessionManager.Role.ADMIN || currentRole == SessionManager.Role.REGISTRAR);
+
         JButton btnAdd    = UITheme.primaryButton("Add");
         JButton btnUpdate = UITheme.warningButton("Update");
         JButton btnDelete = UITheme.dangerButton("Delete");
         JButton btnClear  = UITheme.successButton("Clear");
+
+        btnAdd.setEnabled(canManage);
+        btnUpdate.setEnabled(canManage);
+        btnDelete.setEnabled(canManage);
 
         btnAdd.addActionListener(e -> saveLecturer());
         btnUpdate.addActionListener(e -> updateLecturer());
@@ -211,6 +220,8 @@ public class LecturerPanel extends JPanel {
                     courseModel.addRow(new Object[]{c.getCourseCode(), c.getTitle(), c.getCreditHours(), c.getDepartment()});
                 }
                 if (courses.isEmpty()) showInfo("No courses assigned to this lecturer.");
+            } catch (AccessDeniedException ex) {
+                showError("Access Denied: " + ex.getMessage());
             } catch (SQLException ex) { showError("Error: " + ex.getMessage()); }
         });
 
@@ -224,6 +235,8 @@ public class LecturerPanel extends JPanel {
                 for (Course c : courses) {
                     courseModel.addRow(new Object[]{c.getCourseCode(), c.getTitle(), c.getCreditHours(), c.getDepartment()});
                 }
+            } catch (AccessDeniedException ex) {
+                showError("Access Denied: " + ex.getMessage());
             } catch (SQLException ex) { showError("Error: " + ex.getMessage()); }
         });
 
@@ -249,7 +262,8 @@ public class LecturerPanel extends JPanel {
                     l.getDepartment(), l.getSpecialization(), l.getStatus()
                 });
             }
-        } catch (SQLException e) { showError("Error loading lecturers: " + e.getMessage()); }
+        } catch (AccessDeniedException e) { showError("Access Denied: " + e.getMessage()); }
+        catch (SQLException e) { showError("Error loading lecturers: " + e.getMessage()); }
     }
 
     private void performSearch() {
@@ -264,7 +278,8 @@ public class LecturerPanel extends JPanel {
                     l.getDepartment(), l.getSpecialization(), l.getStatus()
                 });
             }
-        } catch (Exception e) { showError("Search error: " + e.getMessage()); }
+        } catch (AccessDeniedException e) { showError("Access Denied: " + e.getMessage()); }
+        catch (Exception e) { showError("Search error: " + e.getMessage()); }
     }
 
     private void saveLecturer() {
@@ -279,7 +294,8 @@ public class LecturerPanel extends JPanel {
             );
             showInfo("Lecturer added successfully!");
             clearForm(); loadLecturers();
-        } catch (Exception e) { showError("Error: " + e.getMessage()); }
+        } catch (AccessDeniedException e) { showError("Access Denied: " + e.getMessage()); }
+        catch (Exception e) { showError("Error: " + e.getMessage()); }
     }
 
     private void updateLecturer() {
@@ -298,7 +314,8 @@ public class LecturerPanel extends JPanel {
             l.setStatus((String) cmbStatus.getSelectedItem());
             controller.updateLecturer(l);
             showInfo("Lecturer updated!"); loadLecturers();
-        } catch (Exception e) { showError("Error: " + e.getMessage()); }
+        } catch (AccessDeniedException e) { showError("Access Denied: " + e.getMessage()); }
+        catch (Exception e) { showError("Error: " + e.getMessage()); }
     }
 
     private void deleteLecturer() {
@@ -306,6 +323,7 @@ public class LecturerPanel extends JPanel {
         int c = JOptionPane.showConfirmDialog(this, "Delete this lecturer?", "Confirm", JOptionPane.YES_NO_OPTION);
         if (c != JOptionPane.YES_OPTION) return;
         try { controller.deleteLecturer(selectedLecturerId); showInfo("Deleted."); clearForm(); loadLecturers(); }
+        catch (AccessDeniedException e) { showError("Access Denied: " + e.getMessage()); }
         catch (Exception e) { showError("Error: " + e.getMessage()); }
     }
 

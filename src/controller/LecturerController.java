@@ -3,6 +3,8 @@ package controller;
 import model.*;
 import util.FileStorageManager;
 import util.InputValidator;
+import util.SecurityContext;
+import util.SessionManager;
 
 import java.sql.SQLException;
 import java.time.LocalDate;
@@ -28,6 +30,7 @@ public class LecturerController {
                                 String address, String staffId, String department,
                                 String qualification, String specialization, LocalDate hireDate)
             throws SQLException {
+        SecurityContext.requireAnyRole(SessionManager.Role.ADMIN, SessionManager.Role.REGISTRAR);
 
         InputValidator.validateName(firstName, "First name");
         InputValidator.validateName(lastName, "Last name");
@@ -54,6 +57,8 @@ public class LecturerController {
     }
 
     public void updateLecturer(Lecturer lecturer) throws SQLException {
+        SecurityContext.requireAnyRole(SessionManager.Role.ADMIN, SessionManager.Role.REGISTRAR);
+
         InputValidator.validateName(lecturer.getFirstName(), "First name");
         InputValidator.validateName(lecturer.getLastName(), "Last name");
         InputValidator.validateEmail(lecturer.getEmail());
@@ -65,6 +70,8 @@ public class LecturerController {
     }
 
     public void deleteLecturer(int lecturerId) throws SQLException {
+        SecurityContext.requireAnyRole(SessionManager.Role.ADMIN, SessionManager.Role.REGISTRAR);
+
         Lecturer l = lecturerDAO.findById(lecturerId);
         if (l == null) throw new IllegalArgumentException("Lecturer not found: ID " + lecturerId);
         lecturerDAO.delete(lecturerId);
@@ -76,18 +83,22 @@ public class LecturerController {
     // ---------------------------------------------------------------
 
     public Lecturer getLecturerById(int id) throws SQLException {
+        SecurityContext.requireAuthenticated();
         return lecturerDAO.findById(id);
     }
 
     public Lecturer getLecturerByStaffId(String staffId) throws SQLException {
+        SecurityContext.requireAuthenticated();
         return lecturerDAO.findByStaffId(staffId);
     }
 
     public List<Lecturer> getAllLecturers() throws SQLException {
+        SecurityContext.requireAuthenticated();
         return lecturerDAO.findAll();
     }
 
     public List<Lecturer> searchLecturers(String keyword) throws SQLException {
+        SecurityContext.requireAuthenticated();
         InputValidator.validateRequired(keyword, "Search keyword");
         return lecturerDAO.search(keyword.trim());
     }
@@ -98,6 +109,7 @@ public class LecturerController {
 
     public void assignCourse(int lecturerId, int courseId, String academicYear, int semester)
             throws SQLException {
+        SecurityContext.requireAnyRole(SessionManager.Role.ADMIN, SessionManager.Role.REGISTRAR);
         InputValidator.validateRequired(academicYear, "Academic year");
         InputValidator.validateSemester(semester);
         lecturerDAO.assignCourse(lecturerId, courseId, academicYear, semester);
@@ -106,6 +118,7 @@ public class LecturerController {
 
     public List<Course> getAssignedCourses(int lecturerId, String academicYear, int semester)
             throws SQLException {
+        SecurityContext.requireLecturerOwnershipOrAdmin(lecturerId);
         return lecturerDAO.getAssignedCourses(lecturerId, academicYear, semester);
     }
 
@@ -122,6 +135,7 @@ public class LecturerController {
     public List<Course> searchAssignedCourses(int lecturerId, String academicYear,
                                                int semester, String keyword)
             throws SQLException {
+        SecurityContext.requireLecturerOwnershipOrAdmin(lecturerId);
         List<Course> all = lecturerDAO.getAssignedCourses(lecturerId, academicYear, semester);
         String kw = keyword.toLowerCase();
         return all.stream()

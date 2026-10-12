@@ -33,4 +33,41 @@ public final class SystemConfig {
 
     /** Maximum final exam marks. */
     public static final double MAX_EXAM_SCORE = 70.0;
+
+    // ---------------------------------------------------------------
+    // Configurable Governance Policies (Default values with runtime mutability)
+    // ---------------------------------------------------------------
+    private static volatile int maxLecturerCreditHours = 18;
+    private static volatile int maxStudentCoursesPerSemester = 5;
+    private static volatile boolean enforcePrerequisites = true;
+
+    public static int getMaxLecturerCreditHours() {
+        return maxLecturerCreditHours;
+    }
+
+    public static void setMaxLecturerCreditHours(int hours) {
+        if (hours <= 0) {
+            throw new IllegalArgumentException("Max lecturer credit hours must be positive.");
+        }
+        maxLecturerCreditHours = hours;
+    }
+
+    public static int getMaxStudentCoursesPerSemester() {
+        return maxStudentCoursesPerSemester;
+    }
+
+    public static void setMaxStudentCoursesPerSemester(int maxCourses) {
+        if (maxCourses <= 0) {
+            throw new IllegalArgumentException("Max courses per semester must be positive.");
+        }
+        maxStudentCoursesPerSemester = maxCourses;
+    }
+
+    public static boolean isEnforcePrerequisites() {
+        return enforcePrerequisites;
+    }
+
+    public static void setEnforcePrerequisites(boolean enforce) {
+        enforcePrerequisites = enforce;
+    }
 }

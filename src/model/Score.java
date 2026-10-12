@@ -45,6 +45,9 @@ public class Score {
     private String        remarks;
     private int           enteredBy;
     private LocalDateTime enteredAt;
+    private String        status = "DRAFT"; // DRAFT, SUBMITTED, FINALIZED
+    private LocalDateTime finalizedAt;
+    private Integer       finalizedBy;
 
     // ---------------------------------------------------------------
     // Constructors
@@ -187,6 +190,17 @@ public class Score {
 
     public LocalDateTime getEnteredAt()             { return enteredAt; }
     public void          setEnteredAt(LocalDateTime t) { this.enteredAt = t; }
+
+    public String        getStatus()                { return status; }
+    public void          setStatus(String status)   { this.status = status; }
+
+    public LocalDateTime getFinalizedAt()           { return finalizedAt; }
+    public void          setFinalizedAt(LocalDateTime fa) { this.finalizedAt = fa; }
+
+    public Integer       getFinalizedBy()           { return finalizedBy; }
+    public void          setFinalizedBy(Integer fb) { this.finalizedBy = fb; }
+
+    public boolean       isFinalized()              { return "FINALIZED".equalsIgnoreCase(status); }
 
     // ---------------------------------------------------------------
     // toString

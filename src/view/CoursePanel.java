@@ -2,6 +2,8 @@ package view;
 
 import controller.CourseController;
 import model.Course;
+import util.AccessDeniedException;
+import util.SessionManager;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -161,8 +163,13 @@ public class CoursePanel extends JPanel {
         addRow(allocPanel, gbc2, 1, "Lecturer ID",  fldLecturerId);
         addRow(allocPanel, gbc2, 2, "Academic Year",fldAcadYear);
 
+        SessionManager.Role currentRole = SessionManager.getInstance().getCurrentRole();
+        boolean canManage = (currentRole == SessionManager.Role.ADMIN || currentRole == SessionManager.Role.REGISTRAR);
+
         JButton btnAllocStudent  = UITheme.primaryButton("Alloc → Student");
         JButton btnAllocLecturer = UITheme.successButton("Alloc → Lecturer");
+        btnAllocStudent.setEnabled(canManage);
+        btnAllocLecturer.setEnabled(canManage);
 
         btnAllocStudent.addActionListener(e -> {
             if (selectedCourseId < 0) { showError("Select a course first."); return; }
@@ -171,6 +178,8 @@ public class CoursePanel extends JPanel {
                 controller.allocateCourseToStudent(sid, selectedCourseId,
                         fldAcadYear.getText().trim(), Integer.parseInt((String) cmbSemester.getSelectedItem()));
                 showInfo("Course allocated to student successfully!");
+            } catch (AccessDeniedException ex) {
+                showError("Access Denied: " + ex.getMessage());
             } catch (NumberFormatException ex) {
                 showError("Enter a valid Student ID.");
             } catch (Exception ex) { showError("Error: " + ex.getMessage()); }
@@ -183,6 +192,8 @@ public class CoursePanel extends JPanel {
                 controller.allocateCourseToLecturer(lid, selectedCourseId,
                         fldAcadYear.getText().trim(), Integer.parseInt((String) cmbSemester.getSelectedItem()));
                 showInfo("Course allocated to lecturer successfully!");
+            } catch (AccessDeniedException ex) {
+                showError("Access Denied: " + ex.getMessage());
             } catch (NumberFormatException ex) {
                 showError("Enter a valid Lecturer ID.");
             } catch (Exception ex) { showError("Error: " + ex.getMessage()); }
@@ -209,6 +220,10 @@ public class CoursePanel extends JPanel {
         JButton btnDelete = UITheme.dangerButton("Delete");
         JButton btnClear  = UITheme.successButton("Clear");
 
+        btnAdd.setEnabled(canManage);
+        btnUpdate.setEnabled(canManage);
+        btnDelete.setEnabled(canManage);
+
         btnAdd.addActionListener(e -> saveCourse());
         btnUpdate.addActionListener(e -> updateCourse());
         btnDelete.addActionListener(e -> deleteCourse());
@@ -232,7 +247,8 @@ public class CoursePanel extends JPanel {
                     c.getCreditHours(), c.getDepartment(), c.getLevel(), c.getSemester()
                 });
             }
-        } catch (SQLException e) { showError("Error loading courses: " + e.getMessage()); }
+        } catch (AccessDeniedException e) { showError("Access Denied: " + e.getMessage()); }
+        catch (SQLException e) { showError("Error loading courses: " + e.getMessage()); }
     }
 
     private void performSearch() {
@@ -247,7 +263,8 @@ public class CoursePanel extends JPanel {
                     c.getCreditHours(), c.getDepartment(), c.getLevel(), c.getSemester()
                 });
             }
-        } catch (Exception e) { showError("Search error: " + e.getMessage()); }
+        } catch (AccessDeniedException e) { showError("Access Denied: " + e.getMessage()); }
+        catch (Exception e) { showError("Search error: " + e.getMessage()); }
     }
 
     private void saveCourse() {
@@ -258,7 +275,8 @@ public class CoursePanel extends JPanel {
             controller.addCourse(fldCode.getText(), fldTitle.getText(), fldDescription.getText(),
                     credits, fldDepartment.getText(), level, sem);
             showInfo("Course added!"); clearForm(); loadCourses();
-        } catch (Exception e) { showError("Error: " + e.getMessage()); }
+        } catch (AccessDeniedException e) { showError("Access Denied: " + e.getMessage()); }
+        catch (Exception e) { showError("Error: " + e.getMessage()); }
     }
 
     private void updateCourse() {
@@ -273,7 +291,8 @@ public class CoursePanel extends JPanel {
             c.setSemester(Integer.parseInt((String) cmbSemester.getSelectedItem()));
             controller.updateCourse(c);
             showInfo("Course updated!"); loadCourses();
-        } catch (Exception e) { showError("Error: " + e.getMessage()); }
+        } catch (AccessDeniedException e) { showError("Access Denied: " + e.getMessage()); }
+        catch (Exception e) { showError("Error: " + e.getMessage()); }
     }
 
     private void deleteCourse() {
@@ -281,6 +300,7 @@ public class CoursePanel extends JPanel {
         int conf = JOptionPane.showConfirmDialog(this, "Delete this course?", "Confirm", JOptionPane.YES_NO_OPTION);
         if (conf != JOptionPane.YES_OPTION) return;
         try { controller.deleteCourse(selectedCourseId); showInfo("Deleted."); clearForm(); loadCourses(); }
+        catch (AccessDeniedException e) { showError("Access Denied: " + e.getMessage()); }
         catch (Exception e) { showError("Error: " + e.getMessage()); }
     }
 

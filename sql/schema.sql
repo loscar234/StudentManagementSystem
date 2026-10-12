@@ -128,6 +128,9 @@ CREATE TABLE IF NOT EXISTS scores (
     entered_by      INT COMMENT 'lecturer_id who entered the score',
     entered_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    status          ENUM('DRAFT', 'SUBMITTED', 'FINALIZED') NOT NULL DEFAULT 'DRAFT',
+    finalized_at    DATETIME NULL,
+    finalized_by    INT NULL,
     UNIQUE KEY uq_score (student_id, course_id, academic_year, semester),
     CONSTRAINT fk_score_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
     CONSTRAINT fk_score_course  FOREIGN KEY (course_id)  REFERENCES courses(id)  ON DELETE CASCADE,
@@ -182,6 +185,77 @@ CREATE TABLE IF NOT EXISTS reservations (
     status          ENUM('Active', 'Fulfilled', 'Cancelled', 'Expired') DEFAULT 'Active',
     CONSTRAINT fk_res_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
     CONSTRAINT fk_res_book    FOREIGN KEY (book_id)    REFERENCES books(id)    ON DELETE CASCADE
+);
+
+-- ============================================================
+-- TABLE: users (Authentication & RBAC)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS users (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    person_id       INT NULL UNIQUE,
+    username        VARCHAR(50) UNIQUE NOT NULL,
+    password_hash   VARCHAR(255) NOT NULL,
+    role            ENUM('ADMIN', 'REGISTRAR', 'LECTURER', 'LIBRARIAN', 'APPROVER') NOT NULL,
+    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+    failed_attempts INT NOT NULL DEFAULT 0,
+    locked_until    DATETIME NULL,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login      DATETIME NULL,
+    CONSTRAINT fk_user_person FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE SET NULL
+);
+
+-- ============================================================
+-- TABLE: academic_terms
+-- ============================================================
+CREATE TABLE IF NOT EXISTS academic_terms (
+    id                    INT AUTO_INCREMENT PRIMARY KEY,
+    academic_year         VARCHAR(10) NOT NULL,
+    semester              INT NOT NULL CHECK (semester BETWEEN 1 AND 2),
+    start_date            DATE NOT NULL,
+    end_date              DATE NOT NULL,
+    registration_start    DATE NOT NULL,
+    registration_deadline DATE NOT NULL,
+    status                ENUM('UPCOMING', 'ACTIVE', 'CLOSED', 'ARCHIVED') NOT NULL DEFAULT 'UPCOMING',
+    is_current            BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_term_year_sem (academic_year, semester)
+);
+
+-- ============================================================
+-- TABLE: course_prerequisites
+-- ============================================================
+CREATE TABLE IF NOT EXISTS course_prerequisites (
+    id                     INT AUTO_INCREMENT PRIMARY KEY,
+    course_id              INT NOT NULL,
+    prerequisite_course_id INT NOT NULL,
+    min_grade              VARCHAR(5) DEFAULT 'D',
+    created_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_course_prereq (course_id, prerequisite_course_id),
+    CONSTRAINT fk_cp_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+    CONSTRAINT fk_cp_prereq FOREIGN KEY (prerequisite_course_id) REFERENCES courses(id) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- TABLE: academic_audit_log (Audit trail for authorized exception actions)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS academic_audit_log (
+    id               INT AUTO_INCREMENT PRIMARY KEY,
+    entity_type      ENUM('ENROLLMENT', 'SCORE', 'TERM') NOT NULL,
+    entity_id        INT NULL,
+    student_id       INT NULL,
+    course_id        INT NULL,
+    academic_year    VARCHAR(10) NOT NULL,
+    semester         INT NOT NULL,
+    action           VARCHAR(50) NOT NULL,
+    previous_value   TEXT NULL,
+    new_value        TEXT NULL,
+    reason           TEXT NOT NULL,
+    authorized_by    INT NULL COMMENT 'user_id who authorized the change',
+    authorized_user  VARCHAR(50) NOT NULL COMMENT 'username captured at authorization time',
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_audit_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE SET NULL,
+    CONSTRAINT fk_audit_course  FOREIGN KEY (course_id)  REFERENCES courses(id)  ON DELETE SET NULL
 );
 
 -- ============================================================
@@ -360,7 +434,7 @@ INSERT INTO borrowing_records (student_id, book_id, borrow_date, due_date, retur
 
 DELIMITER $$
 
--- Procedure: Register student for courses (enforces max 5)
+-- Procedure: Register student for courses (enforces duplicate check, term deadline, max 5)
 CREATE PROCEDURE sp_register_student_course(
     IN p_student_id INT,
     IN p_course_id  INT,
@@ -369,6 +443,42 @@ CREATE PROCEDURE sp_register_student_course(
 )
 BEGIN
     DECLARE v_count INT;
+    DECLARE v_already_registered INT;
+    DECLARE v_term_status VARCHAR(20);
+    DECLARE v_reg_deadline DATE;
+
+    -- 1. Check duplicate enrollment rule in database
+    SELECT COUNT(*) INTO v_already_registered
+    FROM student_courses
+    WHERE student_id = p_student_id
+      AND course_id = p_course_id
+      AND academic_year = p_acad_year
+      AND semester = p_semester;
+
+    IF v_already_registered > 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Duplicate enrollment: Student is already registered for this course in this academic period.';
+    END IF;
+
+    -- 2. Check academic term lifecycle and registration deadline
+    SELECT status, registration_deadline 
+    INTO v_term_status, v_reg_deadline
+    FROM academic_terms
+    WHERE academic_year = p_acad_year AND semester = p_semester;
+
+    IF v_term_status IS NOT NULL THEN
+        IF v_term_status = 'CLOSED' OR v_term_status = 'ARCHIVED' THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'Academic term is closed. Standard enrollment is not permitted. Authorized override required.';
+        END IF;
+
+        IF CURDATE() > v_reg_deadline THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'Registration deadline has passed. Late registration requires administrative authorization.';
+        END IF;
+    END IF;
+
+    -- 3. Check 5 courses maximum limit
     SELECT COUNT(*) INTO v_count
     FROM student_courses
     WHERE student_id = p_student_id
@@ -382,6 +492,62 @@ BEGIN
         INSERT INTO student_courses (student_id, course_id, academic_year, semester, registration_date)
         VALUES (p_student_id, p_course_id, p_acad_year, p_semester, CURDATE());
     END IF;
+END$$
+
+-- Procedure: Register student for course with authorized exception (Late / Term Override)
+CREATE PROCEDURE sp_register_student_course_exception(
+    IN p_student_id     INT,
+    IN p_course_id      INT,
+    IN p_acad_year      VARCHAR(10),
+    IN p_semester       INT,
+    IN p_authorized_by  INT,
+    IN p_auth_username  VARCHAR(50),
+    IN p_reason         TEXT
+)
+BEGIN
+    DECLARE v_count INT;
+    DECLARE v_already_registered INT;
+    DECLARE v_new_sc_id INT;
+
+    -- 1. Check duplicate enrollment rule
+    SELECT COUNT(*) INTO v_already_registered
+    FROM student_courses
+    WHERE student_id = p_student_id
+      AND course_id = p_course_id
+      AND academic_year = p_acad_year
+      AND semester = p_semester;
+
+    IF v_already_registered > 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Duplicate enrollment: Student is already registered for this course in this academic period.';
+    END IF;
+
+    -- 2. Check 5-course limit
+    SELECT COUNT(*) INTO v_count
+    FROM student_courses
+    WHERE student_id = p_student_id
+      AND academic_year = p_acad_year
+      AND semester = p_semester;
+
+    IF v_count >= 5 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Student cannot register more than 5 courses per semester.';
+    END IF;
+
+    -- 3. Insert exception registration
+    INSERT INTO student_courses (student_id, course_id, academic_year, semester, registration_date)
+    VALUES (p_student_id, p_course_id, p_acad_year, p_semester, CURDATE());
+    SET v_new_sc_id = LAST_INSERT_ID();
+
+    -- 4. Audit trail logging (Preserve reason, user, time)
+    INSERT INTO academic_audit_log (
+        entity_type, entity_id, student_id, course_id, academic_year, semester,
+        action, previous_value, new_value, reason, authorized_by, authorized_user
+    ) VALUES (
+        'ENROLLMENT', v_new_sc_id, p_student_id, p_course_id, p_acad_year, p_semester,
+        'AUTHORIZED_LATE_REGISTRATION', NULL, CONCAT('Enrolled course_id=', p_course_id),
+        p_reason, p_authorized_by, p_auth_username
+    );
 END$$
 
 -- Procedure: Borrow a book

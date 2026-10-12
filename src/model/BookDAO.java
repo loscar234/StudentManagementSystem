@@ -23,7 +23,8 @@ public class BookDAO {
         String sql = "INSERT INTO books (isbn, title, author, edition, version, year_published, "
                    + "publisher, category, total_copies, available_copies, shelf_location) "
                    + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        try (PreparedStatement ps = DatabaseConnection.getInstance().prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, book.getIsbn());       ps.setString(2, book.getTitle());
             ps.setString(3, book.getAuthor());     ps.setString(4, book.getEdition());
             ps.setString(5, book.getVersion());    ps.setInt(6, book.getYearPublished());
@@ -31,17 +32,20 @@ public class BookDAO {
             ps.setInt(9, book.getTotalCopies());   ps.setInt(10, book.getAvailableCopies());
             ps.setString(11, book.getShelfLocation());
             ps.executeUpdate();
-            ResultSet keys = ps.getGeneratedKeys();
-            if (keys.next()) book.setId(keys.getInt(1));
+            try (ResultSet keys = ps.getGeneratedKeys()) {
+                if (keys.next()) book.setId(keys.getInt(1));
+            }
         }
     }
 
     public Book findBookById(int id) throws SQLException {
         String sql = "SELECT * FROM books WHERE id = ?";
-        try (PreparedStatement ps = DatabaseConnection.getInstance().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
-            ResultSet rs = ps.executeQuery();
-            if (rs.next()) return mapBook(rs);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return mapBook(rs);
+            }
         }
         return null;
     }
@@ -49,7 +53,8 @@ public class BookDAO {
     public List<Book> findAllBooks() throws SQLException {
         List<Book> list = new ArrayList<>();
         String sql = "SELECT * FROM books ORDER BY title";
-        try (Statement st = DatabaseConnection.getInstance().createStatement();
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
             while (rs.next()) list.add(mapBook(rs));
         }
@@ -67,11 +72,13 @@ public class BookDAO {
         List<Book> list = new ArrayList<>();
         String sql = "SELECT * FROM books WHERE title LIKE ? OR author LIKE ? ORDER BY title";
         String kw = "%" + keyword + "%";
-        try (PreparedStatement ps = DatabaseConnection.getInstance().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, kw);
             ps.setString(2, kw);
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) list.add(mapBook(rs));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) list.add(mapBook(rs));
+            }
         }
         return list;
     }
@@ -79,7 +86,8 @@ public class BookDAO {
     public void updateBook(Book book) throws SQLException {
         String sql = "UPDATE books SET isbn=?, title=?, author=?, edition=?, version=?, year_published=?, "
                    + "publisher=?, category=?, total_copies=?, available_copies=?, shelf_location=? WHERE id=?";
-        try (PreparedStatement ps = DatabaseConnection.getInstance().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, book.getIsbn());       ps.setString(2, book.getTitle());
             ps.setString(3, book.getAuthor());     ps.setString(4, book.getEdition());
             ps.setString(5, book.getVersion());    ps.setInt(6, book.getYearPublished());
@@ -92,7 +100,8 @@ public class BookDAO {
 
     public void deleteBook(int bookId) throws SQLException {
         String sql = "DELETE FROM books WHERE id = ?";
-        try (PreparedStatement ps = DatabaseConnection.getInstance().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, bookId);
             ps.executeUpdate();
         }
@@ -111,7 +120,8 @@ public class BookDAO {
      */
     public void borrowBook(int studentId, int bookId) throws SQLException {
         String sql = "CALL sp_borrow_book(?, ?)";
-        try (CallableStatement cs = DatabaseConnection.getInstance().prepareCall(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             CallableStatement cs = conn.prepareCall(sql)) {
             cs.setInt(1, studentId);
             cs.setInt(2, bookId);
             cs.execute();
@@ -126,7 +136,8 @@ public class BookDAO {
      */
     public void returnBook(int recordId) throws SQLException {
         String sql = "CALL sp_return_book(?)";
-        try (CallableStatement cs = DatabaseConnection.getInstance().prepareCall(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             CallableStatement cs = conn.prepareCall(sql)) {
             cs.setInt(1, recordId);
             cs.execute();
         }
@@ -146,7 +157,8 @@ public class BookDAO {
     public void reserveBook(int studentId, int bookId) throws SQLException {
         String sql = "INSERT INTO reservations (student_id, book_id, reservation_date, expiry_date, status) "
                    + "VALUES (?, ?, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 7 DAY), 'Active')";
-        try (PreparedStatement ps = DatabaseConnection.getInstance().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, studentId);
             ps.setInt(2, bookId);
             ps.executeUpdate();
@@ -166,10 +178,12 @@ public class BookDAO {
                    + "JOIN students s ON s.id = br.student_id "
                    + "JOIN persons p  ON p.id = s.person_id "
                    + "WHERE br.student_id = ? ORDER BY br.borrow_date DESC";
-        try (PreparedStatement ps = DatabaseConnection.getInstance().prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, studentId);
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) list.add(mapBorrowRecord(rs));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) list.add(mapBorrowRecord(rs));
+            }
         }
         return list;
     }
@@ -184,7 +198,8 @@ public class BookDAO {
                    + "JOIN persons p  ON p.id = s.person_id "
                    + "WHERE br.due_date < CURDATE() AND br.return_date IS NULL "
                    + "ORDER BY br.due_date";
-        try (Statement st = DatabaseConnection.getInstance().createStatement();
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
             while (rs.next()) list.add(mapBorrowRecord(rs));
         }
@@ -200,7 +215,8 @@ public class BookDAO {
                    + "JOIN students s ON s.id = br.student_id "
                    + "JOIN persons p  ON p.id = s.person_id "
                    + "WHERE br.return_date IS NULL ORDER BY br.due_date";
-        try (Statement st = DatabaseConnection.getInstance().createStatement();
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
             while (rs.next()) list.add(mapBorrowRecord(rs));
         }

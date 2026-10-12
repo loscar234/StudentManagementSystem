@@ -3,6 +3,8 @@ package view;
 import controller.LibraryController;
 import model.Book;
 import model.BorrowingRecord;
+import util.AccessDeniedException;
+import util.SessionManager;
 
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
@@ -114,6 +116,10 @@ public class LibraryPanel extends JPanel {
         JButton btnRefresh    = UITheme.successButton("Refresh");
         JButton btnDeleteBook = UITheme.dangerButton("Delete Book");
 
+        SessionManager.Role currentRole = SessionManager.getInstance().getCurrentRole();
+        boolean canManage = (currentRole == SessionManager.Role.ADMIN || currentRole == SessionManager.Role.LIBRARIAN);
+        btnDeleteBook.setEnabled(canManage);
+
         btnRefresh.addActionListener(e -> { fldSearch.setText(""); loadBooks(); });
         btnDeleteBook.addActionListener(e -> deleteSelectedBook());
 
@@ -202,11 +208,18 @@ public class LibraryPanel extends JPanel {
         addRow(controls, gbc, 0, "Student ID", fldStudentId);
         addRow(controls, gbc, 1, "Record ID (for return)", fldRecordId);
 
+        SessionManager.Role currentRole = SessionManager.getInstance().getCurrentRole();
+        boolean canManage = (currentRole == SessionManager.Role.ADMIN || currentRole == SessionManager.Role.LIBRARIAN);
+
         JButton btnBorrow   = UITheme.primaryButton("Borrow");
         JButton btnReturn   = UITheme.successButton("Return");
         JButton btnReserve  = UITheme.warningButton("Reserve");
         JButton btnOverdue  = UITheme.dangerButton("Show Overdue");
         JButton btnHistory  = UITheme.primaryButton("My History");
+
+        btnBorrow.setEnabled(canManage);
+        btnReturn.setEnabled(canManage);
+        btnReserve.setEnabled(canManage);
 
         btnBorrow.setPreferredSize(new Dimension(110, 36));
         btnReturn.setPreferredSize(new Dimension(110, 36));
@@ -336,6 +349,8 @@ public class LibraryPanel extends JPanel {
             controller.borrowBook(sid, selectedBookId);
             showInfo("Book borrowed successfully! Due in 14 days.");
             loadBooks(); loadBorrowings();
+        } catch (AccessDeniedException ex) {
+            showError("Access Denied: " + ex.getMessage());
         } catch (IllegalStateException ex) {
             // No copies available – offer reservation
             int choice = JOptionPane.showConfirmDialog(this,
@@ -356,6 +371,8 @@ public class LibraryPanel extends JPanel {
             showInfo("Book returned successfully!");
             fldRecordId.setText("");
             loadBooks(); loadBorrowings();
+        } catch (AccessDeniedException ex) {
+            showError("Access Denied: " + ex.getMessage());
         } catch (NumberFormatException ex) {
             showError("Record ID must be a number.");
         } catch (Exception ex) { showError("Error: " + ex.getMessage()); }
@@ -369,6 +386,8 @@ public class LibraryPanel extends JPanel {
             int sid = Integer.parseInt(sidStr);
             controller.reserveBook(sid, selectedBookId);
             showInfo("Book reserved! You will be notified when it becomes available (expires in 7 days).");
+        } catch (AccessDeniedException ex) {
+            showError("Access Denied: " + ex.getMessage());
         } catch (NumberFormatException ex) {
             showError("Student ID must be a number.");
         } catch (Exception ex) { showError("Error: " + ex.getMessage()); }
@@ -394,6 +413,8 @@ public class LibraryPanel extends JPanel {
             showInfo("Book deleted successfully!");
             selectedBookId = -1;
             loadBooks();
+        } catch (AccessDeniedException ex) {
+            showError("Access Denied: " + ex.getMessage());
         } catch (SQLException ex) {
             showError("Database Error deleting book: " + ex.getMessage());
         } catch (Exception ex) {
